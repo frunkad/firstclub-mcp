@@ -911,7 +911,7 @@ async def buy_again() -> dict:
 
 # ---------------- checkout: wallet-only; not yet exercised against the live API ----------------
 _TOKEN_TTL = 300
-_pending: dict[str, dict] = {}  # token -> {cartVersion, grandTotal, address_id, items_hash, expires}
+_pending: dict[str, dict] = {}  # token -> {cartVersion (informational only), grandTotal, address_id, items_hash, expires}
 _checkout_lock = asyncio.Lock()
 
 
@@ -1030,7 +1030,10 @@ async def checkout_with_wallet(
         p = await _preview(c)  # re-validate right before paying
         if p["blockers"]:
             return {"error": "blocked", "blockers": p["blockers"]}
-        if (p["cartVersion"] != tok["cartVersion"] or p["grandTotal"] != tok["grandTotal"]
+        # Compare what the user approved (items, total, address), not cartVersion: the server bumps cartVersion
+        # on every validate-checkout, so the re-validate above always yields a newer one than the preview's.
+        # The fresh p["cartVersion"] is what initiate_checkout must send.
+        if (p["grandTotal"] != tok["grandTotal"]
                 or p["address_id"] != tok["address_id"] or p["items_hash"] != tok["items_hash"]
                 or abs((p["grandTotal"] or 0) - expected_total) > 0.009):
             return {"error": "cart_changed", "detail": "Items, total or address changed since the preview; preview again.",
